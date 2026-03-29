@@ -3,6 +3,7 @@ import gymnasium as gym
 import numpy as np
 from gymnasium.wrappers import TimeLimit
 from PIL import Image
+import nle
 
 
 class NetHack(gym.Env):
@@ -36,7 +37,7 @@ class NetHack(gym.Env):
     def reset(self, *, seed=None, options=None):
         seed = self._seed if seed is None else seed
         obs, info = self._env.reset(seed=seed)
-        return self._obs(obs, is_first=True, is_last=False, is_terminal=False), info
+        return self._obs(obs, is_first=True, is_last=False, is_terminal=False)
 
     def step(self, action):
         obs, reward, terminated, truncated, info = self._env.step(int(action))
