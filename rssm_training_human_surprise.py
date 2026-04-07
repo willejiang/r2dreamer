@@ -255,10 +255,6 @@ def load_nld_sequences(
         produced += 1
 
 
-# ============================================================
-# Inverse model
-# ============================================================
-
 def load_inverse_model(path: str):
     inv = np.load(path)
     inv_params = {
@@ -323,9 +319,6 @@ def predict_inverse_np(inv_params, input_dim, obs_t, obs_tp1, rew_t):
     return pred, conf
 
 
-# ============================================================
-# Dreamer loading
-# ============================================================
 
 def compose_config(repo_dir: pathlib.Path, overrides: List[str]):
     from hydra import compose, initialize_config_dir
@@ -357,9 +350,6 @@ def load_r2dreamer_agent(repo_dir: pathlib.Path, overrides: List[str], checkpoin
     return agent, cfg, obs_space, act_space, train_envs, eval_envs, ckpt
 
 
-# ============================================================
-# Tensor helpers
-# ============================================================
 
 def build_obs_tensor_sequence(images, rewards, done, device):
     images = np.asarray(images, dtype=np.uint8)
@@ -393,9 +383,6 @@ def build_prev_action_onehot(action_ids: np.ndarray, act_dim: int, device: torch
     return prev
 
 
-# ============================================================
-# Surprise selection
-# ============================================================
 
 def load_top_sequence_indices(surprise_npz: str, top_k: int) -> np.ndarray:
     data = np.load(surprise_npz, allow_pickle=True)
@@ -436,9 +423,6 @@ def materialize_selected_sequences(
     return out
 
 
-# ============================================================
-# World-model fine-tuning
-# ============================================================
 
 def make_world_model_optimizer(agent, lr: float):
     params = []

@@ -138,8 +138,6 @@ def collect_filtered_transitions(
         ).astype(np.uint8)
 
         rewards = np.diff(scores.astype(np.float32), prepend=scores[:1].astype(np.float32))
-
-        # keypress at time t drives transition t -> t+1
         usable = min(T - 1, len(keypresses))
         for t in range(usable):
             raw_action = int(keypresses[t])
@@ -225,7 +223,6 @@ def train_inverse_on_nld_aa_23(
     input_dim = X.shape[1]
     num_actions = len(ACTION_SET_23)
 
-    # shuffle / split
     idx = rng.permutation(len(X))
     X = X[idx]
     y = y[idx]
@@ -253,20 +250,16 @@ def train_inverse_on_nld_aa_23(
         h1, h2, logits = model.forward(xb)
         loss, probs, grad_logits = cross_entropy_and_grad(logits, yb)
 
-        # backprop output layer
         grad_w3 = h2.T @ grad_logits
         grad_b3 = grad_logits.sum(axis=0)
 
-        # backprop into hidden layer 2
         grad_h2 = grad_logits @ model.w3.T
 
-        # recompute preactivations cleanly
         z1 = xb @ model.w1 + model.b1
         h1 = silu_np(z1)
         z2 = h1 @ model.w2 + model.b2
         h2 = silu_np(z2)
 
-        # SiLU derivative: sigmoid(z) + z * sigmoid(z) * (1 - sigmoid(z))
         sig_z2 = 1.0 / (1.0 + np.exp(-z2))
         dsilu_z2 = sig_z2 + z2 * sig_z2 * (1.0 - sig_z2)
         grad_z2 = grad_h2 * dsilu_z2
@@ -274,7 +267,6 @@ def train_inverse_on_nld_aa_23(
         grad_w2 = h1.T @ grad_z2
         grad_b2 = grad_z2.sum(axis=0)
 
-        # backprop into hidden layer 1
         grad_h1 = grad_z2 @ model.w2.T
         sig_z1 = 1.0 / (1.0 + np.exp(-z1))
         dsilu_z1 = sig_z1 + z1 * sig_z1 * (1.0 - sig_z1)
