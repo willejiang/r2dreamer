@@ -557,7 +557,7 @@ def compute_surprise_r2(
             raise ValueError(f"Unsupported metric: {metric}")
 
         # keep 1-step-ahead error for each start time t
-        step_surprise.append(err[:, 0])
+        step_surprise.append(err[:, -1])
 
     if not step_surprise:
         return np.zeros((0,), dtype=np.float32)
@@ -573,33 +573,70 @@ def compute_surprise_for_sequence(
     inv_input_dim: int,
     metric: str,
     horizon: int,
+    action_mode: str = "inverse",
+    random_seed: int = 0,
+    seq_idx: int = 0,
 ) -> Tuple[np.ndarray, Dict[str, Any]]:
     device = agent.device
     act_dim = agent.act_dim
 
     obs = build_obs_tensor_sequence(ex.images, ex.rewards, ex.done, device=device)
 
-    if ex.actions is None:
-        pred_actions, conf, top5, probs = predict_inverse_np(
-            inv_params,
-            inv_input_dim,
-            ex.images[:-1],
-            ex.images[1:],
-            ex.rewards[:-1],
-        )
-        action_ids = np.asarray(pred_actions, dtype=np.int32)
-        conf = np.asarray(conf, dtype=np.float32)
-        extra = {
-            "used_inverse_model": True,
-            "inverse_mean_conf": float(conf.mean()) if len(conf) else float("nan"),
-        }
-    else:
+    rng = np.random.default_rng(random_seed + seq_idx)
+
+    if action_mode == "dataset":
+        if ex.actions is None:
+            raise ValueError("action_mode=dataset but this sequence has no ground-truth actions.")
         action_ids = np.asarray(ex.actions, dtype=np.int32)
         conf = None
         extra = {
-            "used_inverse_model": False,
+            "used_action_mode": "dataset",
             "inverse_mean_conf": float("nan"),
         }
+
+    elif action_mode == "inverse":
+        if ex.actions is None:
+            pred_actions, conf, top5, probs = predict_inverse_np(
+                inv_params,
+                inv_input_dim,
+                ex.images[:-1],
+                ex.images[1:],
+                ex.rewards[:-1],
+            )
+            action_ids = np.asarray(pred_actions, dtype=np.int32)
+            conf = np.asarray(conf, dtype=np.float32)
+            extra = {
+                "used_action_mode": "inverse",
+                "inverse_mean_conf": float(conf.mean()) if len(conf) else float("nan"),
+            }
+        else:
+            action_ids = np.asarray(ex.actions, dtype=np.int32)
+            conf = None
+            extra = {
+                "used_action_mode": "dataset",
+                "inverse_mean_conf": float("nan"),
+            }
+
+    elif action_mode == "random":
+        Tm1 = len(ex.images) - 1
+        action_ids = rng.integers(0, agent.act_dim, size=Tm1, dtype=np.int32)
+        conf = None
+        extra = {
+            "used_action_mode": "random",
+            "inverse_mean_conf": float("nan"),
+        }
+
+    elif action_mode == "zeros":
+        Tm1 = len(ex.images) - 1
+        action_ids = np.zeros((Tm1,), dtype=np.int32)
+        conf = None
+        extra = {
+            "used_action_mode": "zeros",
+            "inverse_mean_conf": float("nan"),
+        }
+
+    else:
+        raise ValueError(f"Unknown action_mode: {action_mode}")
 
     prev_action = build_prev_action_onehot(action_ids, act_dim=act_dim, device=device)
 
@@ -667,7 +704,9 @@ def parse_args():
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--dataset_name", type=str, default=None)
     parser.add_argument("--image_size", type=int, nargs=2, default=[64, 64])
-
+    parser.add_argument("--action_mode", type=str, default="inverse",
+                    choices=["inverse", "random", "zeros", "dataset"])
+    parser.add_argument("--random_seed", type=int, default=0)
     # Repeatable hydra overrides
     parser.add_argument("--override", action="append", default=[],
                         help="Hydra override, e.g. --override env=nethack")
@@ -721,6 +760,9 @@ def main():
             inv_input_dim=inv_input_dim,
             metric=args.metric,
             horizon=args.horizon,
+            action_mode=args.action_mode,
+            random_seed=args.random_seed,
+            seq_idx=idx,
         )
 
         all_surprises.append(seq_surprise)
